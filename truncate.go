@@ -12,6 +12,10 @@ const (
 	escapedStringToken = '\\'
 )
 
+var (
+	ErrNotClosedString = errors.New("error string token is not closed")
+)
+
 // TruncateJsonString will truncate all string in json between two char `"`.
 // if the string length more than maxChars. Zero means no truncate will performed.
 // Some chars will preserve into the output.
@@ -74,7 +78,7 @@ func TruncateJsonString(ctx context.Context, data []byte, maxChars int) ([]byte,
 			}
 
 			if i == len(data)-1 {
-				return nil, errors.New("error token is not closed")
+				return nil, ErrNotClosedString
 			}
 
 			str = append(str, datum)
@@ -177,7 +181,7 @@ func TruncateJsonValueString(ctx context.Context, data []byte, maxChars int) ([]
 			}
 
 			if i == len(data)-1 {
-				return nil, errors.New("error token is not closed")
+				return nil, ErrNotClosedString
 			}
 
 			str = append(str, datum)

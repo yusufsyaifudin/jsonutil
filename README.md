@@ -95,6 +95,18 @@ If you use `TruncateJsonString`, the key will truncated as well because it is mo
 }
 ```
 
+### JSON Value
+
+Useful when you consume an API that return inconsistent data type.
+For example, sometimes it returns number: `{"amount": 1}`, and at the same time it can return string `{"amount":"20000"}`,
+or maybe float number `{"amount": 100.00}` or if you don't lucky enough it can be object `{"amount": {"currency": "IDR", "value": 1200}}`
+or array `{"amount": ["IDR", 100]}`.
+
+I know, that API is bad, but when you don't have control to change the API response and forced to consume it,
+the only thing you can do is **handle it**.
+
+The `jsonutil.Value` is intended to handle that.
+
 ## Benchmark
 
 ```shell
@@ -106,8 +118,11 @@ goos: darwin
 goarch: amd64
 pkg: github.com/yusufsyaifudin/jsonutil
 cpu: Intel(R) Core(TM) i5-8279U CPU @ 2.40GHz
-BenchmarkTruncateJsonString-8              65910             18346 ns/op            8940 B/op        172 allocs/op
-BenchmarkTruncateJsonValueString-8         44377             27951 ns/op            8396 B/op        149 allocs/op
+BenchmarkTruncateJsonString-8              63339             18609 ns/op            8941 B/op        172 allocs/op
+BenchmarkTruncateJsonValueString-8         47811             23996 ns/op            8396 B/op        149 allocs/op
+BenchmarkValue_MarshalJSON-8              170482              6491 ns/op            2498 B/op         48 allocs/op
+Benchmark_UnmarshalJSON-8                  76029             15095 ns/op            5138 B/op        114 allocs/op
 PASS
-ok      github.com/yusufsyaifudin/jsonutil      4.761s
+ok      github.com/yusufsyaifudin/jsonutil      7.113s
+
 ```
