@@ -1,0 +1,9 @@
+# IDE output
+.idea
+
+# go test and bench output
+bench.txt
+cpu.out
+mem.out
+trace.out
+jsonutil.test
