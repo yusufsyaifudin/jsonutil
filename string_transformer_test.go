@@ -3,6 +3,7 @@ package jsonutil_test
 import (
 	"context"
 	"encoding/json"
+	"sync"
 	"testing"
 
 	"github.com/yusufsyaifudin/jsonutil"
@@ -310,6 +311,37 @@ func TestTransformer_TransformBytes(t *testing.T) {
 		})
 	}
 
+}
+
+// TestTransformer_TransformBytes_GoRoutine test using Go routine to early detect race condition if occurs.
+func TestTransformer_TransformBytes_GoRoutine(t *testing.T) {
+	config := jsonutil.Config{
+		StringTransformer: func(ctx context.Context, info jsonutil.KVInfo) string {
+			if info.Key == "email" {
+				return "xxx"
+			}
+
+			return info.Value
+		},
+	}
+
+	transformer := jsonutil.NewTransformer(config)
+
+	N := 1000
+	wg := sync.WaitGroup{}
+	wg.Add(N)
+	for i := 0; i < N; i++ {
+		go func() {
+			defer wg.Done()
+			_, err := transformer.TransformBytes(context.Background(), []byte(largeArray))
+			if err != nil {
+				t.Error(err)
+				return
+			}
+		}()
+	}
+
+	wg.Done()
 }
 
 func BenchmarkTransformer_Transform(b *testing.B) {
