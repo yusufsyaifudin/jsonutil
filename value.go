@@ -13,10 +13,18 @@ import (
 type Value struct {
 	str string
 	raw interface{}
+	json.RawMessage
 }
 
 var _ json.Marshaler = (*Value)(nil)
 var _ json.Unmarshaler = (*Value)(nil)
+
+func NewValue(value interface{}) Value {
+	return Value{
+		str: fmt.Sprintf("%v", value),
+		raw: value,
+	}
+}
 
 // MarshalJSON returns v as the JSON encoding of v.
 func (v Value) MarshalJSON() ([]byte, error) {
@@ -73,11 +81,4 @@ func (v Value) Float64() (float64, error) {
 
 func (v Value) Interface() interface{} {
 	return v.raw
-}
-
-func NewValue(value interface{}) Value {
-	return Value{
-		str: fmt.Sprintf("%v", value),
-		raw: value,
-	}
 }
