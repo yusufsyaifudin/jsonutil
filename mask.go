@@ -2,32 +2,79 @@ package jsonutil
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
 )
 
-const maskedStr = "xxx"
+type (
+	MaskFunc     func(ctx context.Context, value string) string
+	TruncateFunc func(ctx context.Context, value string) string
+)
 
-type MaskFunc func(ctx context.Context, value string) string
+var DefaultMaskFunc MaskFunc = func(ctx context.Context, value string) string {
+	return "xxx"
+}
 
-func DefaultMaskFunc(ctx context.Context, value string) string {
-	return maskedStr
+var DefaultTruncateFunc TruncateFunc = func(ctx context.Context, value string) string {
+	return "xxx"
 }
 
 type Config struct {
-	Keys map[string]struct{}
+	Keys         map[string]MaskFunc
+	TruncateFunc TruncateFunc
+
+	// you can define your own json marshal or unmarshal for speed
+	JSONMarshal   func(v interface{}) ([]byte, error)
+	JSONUnmarshal func(data []byte, v interface{}) error
 }
 
 type Masking struct {
-	Keys map[string]struct{}
+	Config Config
 }
 
 func NewMasking(conf Config) *Masking {
 
-	return &Masking{
-		Keys: conf.Keys,
+	for s, maskFunc := range conf.Keys {
+		if maskFunc == nil {
+			maskFunc = DefaultMaskFunc
+		}
+
+		conf.Keys[s] = maskFunc
 	}
+
+	if conf.JSONMarshal == nil {
+		conf.JSONMarshal = json.Marshal
+	}
+
+	if conf.JSONUnmarshal == nil {
+		conf.JSONUnmarshal = json.Unmarshal
+	}
+
+	return &Masking{Config: conf}
 }
 
+func (m *Masking) MaskByte(ctx context.Context, b []byte) ([]byte, error) {
+	var data interface{}
+	err := m.Config.JSONUnmarshal(b, &data)
+	if err != nil {
+		return nil, err
+	}
+
+	out, err := m.Mask(ctx, data)
+	if err != nil {
+		return nil, err
+	}
+
+	return m.Config.JSONMarshal(out)
+}
+
+// Mask will handle masking of JSON string value only.
+// Any value like object, array, number and null will not be masked.
+// This function will walk to every JSON array element and object value.
+// Means that if you have an object `{a: {b: ""}}` then you can mask the value on key b.
+// This also applies in array [{a: {b: ""}}].
+// In case you have an array of string like this ["", ""] it will not be masked,
+// because it is top level and does not have key.
 func (m *Masking) Mask(ctx context.Context, data interface{}) (interface{}, error) {
 	original := reflect.ValueOf(data)
 	kind := original.Kind()
@@ -42,7 +89,7 @@ func (m *Masking) Mask(ctx context.Context, data interface{}) (interface{}, erro
 		altered.Set(original)
 	}
 
-	return altered, nil
+	return altered.Interface(), nil
 }
 
 func (m *Masking) maskMap(ctx context.Context, elem reflect.Value) (altered reflect.Value) {
@@ -60,12 +107,13 @@ func (m *Masking) maskMap(ctx context.Context, elem reflect.Value) (altered refl
 		switch mapRange.Value().Interface().(type) {
 		case string:
 			// if key is not in the list of masked
-			if _, shouldMasked := m.Keys[mapRange.Key().String()]; !shouldMasked {
-				altered.SetMapIndex(mapRange.Key(), mapRange.Value())
+			if maskFunc, shouldMasked := m.Config.Keys[mapRange.Key().String()]; shouldMasked {
+				v := maskFunc(ctx, mapRange.Value().String())
+				altered.SetMapIndex(mapRange.Key(), reflect.ValueOf(v))
 				continue
 			}
 
-			altered.SetMapIndex(mapRange.Key(), reflect.ValueOf(maskedStr))
+			altered.SetMapIndex(mapRange.Key(), mapRange.Value())
 
 		case map[string]interface{}:
 			v := m.maskMapInterface(ctx, mapRange.Value().Interface().(map[string]interface{}))
@@ -73,7 +121,7 @@ func (m *Masking) maskMap(ctx context.Context, elem reflect.Value) (altered refl
 
 		case []interface{}:
 			values := mapRange.Value().Interface().([]interface{})
-			newArr := m.maskSliceInterface(ctx, values)
+			newArr := m.maskSliceInterface(ctx, mapRange.Key().String(), values)
 
 			altered.SetMapIndex(mapRange.Key(), reflect.ValueOf(newArr))
 
@@ -93,12 +141,12 @@ func (m *Masking) maskMapInterface(ctx context.Context, myMap map[string]interfa
 
 		switch v.(type) {
 		case string:
-			if _, shouldMasked := m.Keys[k]; !shouldMasked {
-				myMap[k] = v
+			if maskFunc, shouldMasked := m.Config.Keys[k]; shouldMasked {
+				myMap[k] = maskFunc(ctx, v.(string))
 				continue
 			}
 
-			myMap[k] = maskedStr
+			myMap[k] = v
 
 		case map[string]interface{}:
 			// No need to check if key is in whitelist or not, because we do recursive call.
@@ -107,14 +155,7 @@ func (m *Masking) maskMapInterface(ctx context.Context, myMap map[string]interfa
 			myMap[k] = m.maskMapInterface(ctx, v.(map[string]interface{}))
 
 		case []interface{}:
-
-			// TODO: some bug occur here
-			if _, shouldMasked := m.Keys[k]; !shouldMasked {
-				myMap[k] = v
-				continue
-			}
-
-			myMap[k] = m.maskSliceInterface(ctx, v.([]interface{}))
+			myMap[k] = m.maskSliceInterface(ctx, k, v.([]interface{}))
 
 		default:
 			myMap[k] = v
@@ -139,7 +180,8 @@ func (m *Masking) maskSlice(ctx context.Context, elem reflect.Value) (altered re
 			v := m.maskMapInterface(ctx, value.Interface().(map[string]interface{}))
 			altered.Index(i).Set(reflect.ValueOf(v))
 		case []interface{}:
-			v := m.maskSliceInterface(ctx, value.Interface().([]interface{}))
+			// top level array doesn't have key
+			v := m.maskSliceInterface(ctx, "", value.Interface().([]interface{}))
 			altered.Index(i).Set(reflect.ValueOf(v))
 		default:
 			altered.Index(i).Set(value)
@@ -149,18 +191,23 @@ func (m *Masking) maskSlice(ctx context.Context, elem reflect.Value) (altered re
 	return
 }
 
-func (m *Masking) maskSliceInterface(ctx context.Context, slices []interface{}) []interface{} {
+func (m *Masking) maskSliceInterface(ctx context.Context, key string, slices []interface{}) []interface{} {
 	newSlices := make([]interface{}, len(slices))
 	for i, v := range slices {
 		switch v.(type) {
 		case string:
-			newSlices[i] = maskedStr
+			if maskFunc, shouldMasked := m.Config.Keys[key]; shouldMasked {
+				newSlices[i] = maskFunc(ctx, v.(string))
+				continue
+			}
+
+			newSlices[i] = v
 
 		case map[string]interface{}:
 			newSlices[i] = m.maskMapInterface(ctx, v.(map[string]interface{}))
 
 		case []interface{}:
-			newSlices[i] = m.maskSliceInterface(ctx, v.([]interface{}))
+			newSlices[i] = m.maskSliceInterface(ctx, key, v.([]interface{}))
 
 		default:
 			newSlices[i] = v
