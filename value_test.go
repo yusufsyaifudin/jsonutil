@@ -194,7 +194,7 @@ func BenchmarkValue_MarshalJSON(b *testing.B) {
 	}
 }
 
-func Benchmark_UnmarshalJSON(b *testing.B) {
+func BenchmarkValue_UnmarshalJSON(b *testing.B) {
 	complexData := Complex{
 		RealString: jsonutil.NewValue("123"),
 		RealInt:    jsonutil.NewValue(123),
