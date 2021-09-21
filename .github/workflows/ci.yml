@@ -18,6 +18,8 @@ jobs:
         uses: actions/setup-go@v2
         with:
           go-version: ${{ matrix.go }}
+
+      - name: Install Go Lint
         run: go version && go mod tidy && go get -u golang.org/x/lint/golint
 
       - name: Test With Coverage
