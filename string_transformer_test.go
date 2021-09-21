@@ -330,6 +330,7 @@ func TestTransformer_TransformBytes_GoRoutine(t *testing.T) {
 	N := 1000
 	wg := sync.WaitGroup{}
 	wg.Add(N)
+
 	for i := 0; i < N; i++ {
 		go func() {
 			defer wg.Done()
@@ -341,7 +342,7 @@ func TestTransformer_TransformBytes_GoRoutine(t *testing.T) {
 		}()
 	}
 
-	wg.Done()
+	wg.Wait()
 }
 
 func BenchmarkTransformer_Transform(b *testing.B) {
