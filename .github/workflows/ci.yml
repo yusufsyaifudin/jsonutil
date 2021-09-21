@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go: [ '1.13', '1.14', '1.15', '1.16', '1.17' ]
+
+    name: Go ${{ matrix.go }} sample
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go }}
+        run: go version && go mod tidy && go get -u golang.org/x/lint/golint
+
+      - name: Test With Coverage
+        run: go test -race -gcflags=-l -v  -coverprofile=coverage.txt -covermode=atomic ./...
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v1
+
+      - name: Run Vet & Lint
+        run: |
+          go vet ./...
+          golint -set_exit_status=1 ./...
