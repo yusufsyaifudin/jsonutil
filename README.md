@@ -106,6 +106,20 @@ go test -run=. -bench=. -benchmem -cpuprofile=cpu.out -memprofile=mem.out -trace
 
 ```shell
 goos: darwin
+goarch: arm64
+pkg: github.com/yusufsyaifudin/jsonutil
+BenchmarkTransformer_Transform/large_array-8              427910              2735 ns/op             688 B/op         41 allocs/op
+BenchmarkTransformer_Transform/all_JSON_type-8            257271              4589 ns/op            3488 B/op        108 allocs/op
+BenchmarkTransformer_Transform/nested_100_object-8        231087              5117 ns/op             608 B/op         12 allocs/op
+BenchmarkTransformer_Transform/nested_1000_object-8        24769             49124 ns/op             623 B/op         12 allocs/op
+BenchmarkValue_MarshalJSON-8                              280858              4244 ns/op            2628 B/op         43 allocs/op
+BenchmarkValue_UnmarshalJSON-8                            120735              9964 ns/op            5268 B/op        109 allocs/op
+PASS
+ok      github.com/yusufsyaifudin/jsonutil      8.170s
+```
+
+```shell
+goos: darwin
 goarch: amd64
 pkg: github.com/yusufsyaifudin/jsonutil
 cpu: Intel(R) Core(TM) i5-8279U CPU @ 2.40GHz
@@ -118,3 +132,4 @@ BenchmarkValue_UnmarshalJSON-8                             72892             180
 PASS
 ok      github.com/yusufsyaifudin/jsonutil      15.688s
 ```
+
